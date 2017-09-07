@@ -135,6 +135,7 @@ service<http> MySonarService{
             snapshot_id= ss.snapshot_id;
 
         }
+        datatables:close(ssdt);
 
         datatable dt = sql:ClientConnector.select(dbConnector, "SELECT pqd_product_name FROM WSO2_Product_Quality.pqd_product", params);
         Product_Names pn;
@@ -151,6 +152,7 @@ service<http> MySonarService{
                 any row0 = datatables:next(cdt);
                 ck,err=(Component_Keys)row0;
                 string project_key=ck.pqd_sonar_project_key;
+                string component_id=ck.pqd_component_id;
                 if(project_key != "") {
                     datatable idt = sql:ClientConnector.select(dbConnector, "SELECT * FROM sonar_issue_db.sonar_component_issue_table WHERE project_key='" + project_key + "' and snapshot_id=" + snapshot_id, params);
                     Sonar_Issues si;
@@ -159,20 +161,25 @@ service<http> MySonarService{
                         si, err = (Sonar_Issues)row2;
 
                         string pk = si.project_key;
+
                         int bb =si.BLOCKER_BUG; int cb= si.CRITICAL_BUG; int mab= si.MAJOR_BUG; int mib=si.MINOR_BUG; int ib= si.INFO_BUG;
                         int bc=si.BLOCKER_CODE_SMELL; int cc=si.CRITICAL_CODE_SMELL;int mac=si.MAJOR_CODE_SMELL;int mic=si.MINOR_CODE_SMELL;int ic=si.INFO_CODE_SMELL;
                         int bv=si.BLOCKER_VULNERABILITY; int cv=si.CRITICAL_VULNERABILITY; int mav=si.MAJOR_VULNERABILITY; int miv= si.MINOR_VULNERABILITY;int iv=si.INFO_VULNERABILITY;
 
-                        json comp={"pk":project_key,"bb":bb,"cb":cb,"mab":mab,"mib":mib,"ib":ib,"bc":bc,"cc":cc,"mac":mac,"mic":mic,"ic":ic,"bv":bv,"cv":cv,"mav":mav,"miv":miv,"iv":iv};
+                        json comp={"product":product_name,"pk":component_id,"bb":bb,"cb":cb,"mab":mab,"mib":mib,"ib":ib,"bc":bc,"cc":cc,"mac":mac,"mic":mic,"ic":ic,"bv":bv,"cv":cv,"mav":mav,"miv":miv,"iv":iv};
                         rspns[i]=comp;
 
                         i = i + 1;
                     }
+                    datatables:close(idt);
 
                 }
             }
+            datatables:close(cdt);
 
         }
+        datatables:close(dt);
+
         json returnJson={"products":products,"components":rspns};
         message response = {};
         messages:setJsonPayload(response,returnJson);
@@ -203,6 +210,7 @@ service<http> MySonarService{
             reply response;
 
         }
+        datatables:close(dt);
 
     }
 
@@ -264,7 +272,7 @@ function issuesCount (string project_key, string product) (json) {
     return sonarPayload;
 }
 
-function componentIssues(json projects)(json){
+function componentIssues(json projects){
     int loopsize=lengthof projects;
     system:println(loopsize);
 
@@ -291,6 +299,7 @@ function componentIssues(json projects)(json){
         snapshot_id= ss.snapshot_id;
 
     }
+    datatables:close(dt);
 
     sql:Parameter snapshotid = {sqlType:"integer",value:snapshot_id};
     int i=0;
@@ -355,8 +364,7 @@ function componentIssues(json projects)(json){
 
     string customEndTimeString = time:format(time:currentTime(), "yyyy-MM-dd--HH:mm:ss");
     system:println("End time: "+customEndTimeString);
-    json issue_jason;
-    return issue_jason;
+    dbConnector.close();
 
 }
 
