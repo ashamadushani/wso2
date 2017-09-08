@@ -179,7 +179,7 @@ service<http> MySonarService{
 
         }
         datatables:close(dt);
-
+        dbConnector.close();
         json returnJson={"products":products,"components":rspns};
         message response = {};
         messages:setJsonPayload(response,returnJson);
@@ -211,6 +211,7 @@ service<http> MySonarService{
 
         }
         datatables:close(dt);
+        dbConnector.close()h 
 
     }
 
