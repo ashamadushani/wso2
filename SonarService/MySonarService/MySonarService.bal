@@ -211,7 +211,7 @@ service<http> MySonarService{
 
         }
         datatables:close(dt);
-        dbConnector.close()h 
+        dbConnector.close();
 
     }
 
