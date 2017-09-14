@@ -32,11 +32,16 @@ struct Sonar_Issues{
 
 struct Product_Names{
     string pqd_product_name;
+    string pqd_sonar_project_key;
 }
 
 struct Component_Keys{
     string pqd_component_id;
     string pqd_sonar_project_key;
+}
+
+struct Area_Names{
+    string pqd_area_name;
 }
 
 string basicurl="https://wso2.org/sonar";
@@ -117,8 +122,10 @@ service<http> MySonarService{
     @http:Path {value:"/getAllIssues"}
     resource SonarAllIssue (message m) {
         json rspns=[];
+        json areas=[];
         json products=[];
-        int i=0;int j=0;
+        json pns=[];
+        int i=0;int n=0;
 
         sql:ClientConnector dbConnector = create sql:ClientConnector(propertiesMap);
 
@@ -137,50 +144,93 @@ service<http> MySonarService{
         }
         datatables:close(ssdt);
 
-        datatable dt = sql:ClientConnector.select(dbConnector, "SELECT pqd_product_name FROM WSO2_Product_Quality.pqd_product", params);
-        Product_Names pn;
+        int j=0;
+        datatable dt = sql:ClientConnector.select(dbConnector, "SELECT pqd_area_name FROM WSO2_Product_Quality.pqd_area", params);
+        Area_Names an;
         while (datatables:hasNext(dt)) {
             any row1 = datatables:next(dt);
-            pn, err = (Product_Names)row1;
+            an, err = (Area_Names)row1;
 
-            string product_name = pn.pqd_product_name;
-            products[j]=product_name;
-            j=j+1;
-            datatable cdt=sql:ClientConnector.select(dbConnector,"SELECT pqd_component_id,pqd_sonar_project_key FROM WSO2_Product_Quality.pqd_component WHERE pqd_product_name='"+product_name+"'",params);
-            Component_Keys ck;
-            while(datatables:hasNext(cdt)){
-                any row0 = datatables:next(cdt);
-                ck,err=(Component_Keys)row0;
-                string project_key=ck.pqd_sonar_project_key;
-                string component_id=ck.pqd_component_id;
-                if(project_key != "") {
-                    datatable idt = sql:ClientConnector.select(dbConnector, "SELECT * FROM sonar_issue_db.sonar_component_issue_table WHERE project_key='" + project_key + "' and snapshot_id=" + snapshot_id, params);
-                    Sonar_Issues si;
-                    while (datatables:hasNext(idt)) {
-                        any row2 = datatables:next(idt);
-                        si, err = (Sonar_Issues)row2;
+            string area_name = an.pqd_area_name;
+            areas[j] = area_name;
+            j = j + 1;
 
-                        string pk = si.project_key;
+            json productNames=[];
+            json productIssues=[];
+            datatable pdt = sql:ClientConnector.select(dbConnector, "SELECT pqd_product_name,pqd_sonar_project_key FROM WSO2_Product_Quality.pqd_product WHERE pqd_area_name='" + area_name + "'", params);
+            Product_Names pn;
+            int k=0;
+            int l=0;
+            while (datatables:hasNext(pdt)) {
+                any rowp = datatables:next(pdt);
+                pn,err = (Product_Names)rowp;
 
-                        int bb =si.BLOCKER_BUG; int cb= si.CRITICAL_BUG; int mab= si.MAJOR_BUG; int mib=si.MINOR_BUG; int ib= si.INFO_BUG;
-                        int bc=si.BLOCKER_CODE_SMELL; int cc=si.CRITICAL_CODE_SMELL;int mac=si.MAJOR_CODE_SMELL;int mic=si.MINOR_CODE_SMELL;int ic=si.INFO_CODE_SMELL;
-                        int bv=si.BLOCKER_VULNERABILITY; int cv=si.CRITICAL_VULNERABILITY; int mav=si.MAJOR_VULNERABILITY; int miv= si.MINOR_VULNERABILITY;int iv=si.INFO_VULNERABILITY;
+                string product_name = pn.pqd_product_name;
+                string product_sonar_key= pn.pqd_sonar_project_key;
+                productNames[k] = product_name;
+                k = k+1;
 
-                        json comp={"product":product_name,"pk":component_id,"bb":bb,"cb":cb,"mab":mab,"mib":mib,"ib":ib,"bc":bc,"cc":cc,"mac":mac,"mic":mic,"ic":ic,"bv":bv,"cv":cv,"mav":mav,"miv":miv,"iv":iv};
-                        rspns[i]=comp;
+                datatable pidt = sql:ClientConnector.select(dbConnector, "SELECT * FROM sonar_issue_db.sonar_component_issue_table WHERE project_key='" + product_sonar_key + "' and snapshot_id=" + snapshot_id, params);
+                Sonar_Issues si;
 
-                        i = i + 1;
-                    }
-                    datatables:close(idt);
+                while (datatables:hasNext(pidt)) {
+                    any row2 = datatables:next(pidt);
+                    si, err = (Sonar_Issues)row2;
 
+                    string pk = si.project_key;
+
+                    int bb = si.BLOCKER_BUG; int cb = si.CRITICAL_BUG; int mab = si.MAJOR_BUG; int mib = si.MINOR_BUG; int ib = si.INFO_BUG;
+                    int bc = si.BLOCKER_CODE_SMELL; int cc = si.CRITICAL_CODE_SMELL;int mac = si.MAJOR_CODE_SMELL;int mic = si.MINOR_CODE_SMELL;int ic = si.INFO_CODE_SMELL;
+                    int bv = si.BLOCKER_VULNERABILITY; int cv = si.CRITICAL_VULNERABILITY; int mav = si.MAJOR_VULNERABILITY; int miv = si.MINOR_VULNERABILITY;int iv = si.INFO_VULNERABILITY;
+
+                    json comp = {"area":area_name, "pk":product_name, "bb":bb, "cb":cb, "mab":mab, "mib":mib, "ib":ib, "bc":bc, "cc":cc, "mac":mac, "mic":mic, "ic":ic, "bv":bv, "cv":cv, "mav":mav, "miv":miv, "iv":iv};
+                    productIssues[l] = comp;
+                    l = l + 1;
                 }
+
+                datatables:close(pidt);
+
+
+
+                datatable cdt = sql:ClientConnector.select(dbConnector, "SELECT pqd_component_id,pqd_sonar_project_key FROM WSO2_Product_Quality.pqd_component WHERE pqd_product_name='" + product_name + "'", params);
+                Component_Keys ck;
+                while (datatables:hasNext(cdt)) {
+                    any row0 = datatables:next(cdt);
+                    ck, err = (Component_Keys)row0;
+
+                    string project_key = ck.pqd_sonar_project_key;
+                    string component_id = ck.pqd_component_id;
+
+                    datatable idt = sql:ClientConnector.select(dbConnector, "SELECT * FROM sonar_issue_db.sonar_component_issue_table WHERE project_key='" + project_key + "' and snapshot_id=" + snapshot_id, params);
+
+                        while (datatables:hasNext(idt)) {
+                            any row2 = datatables:next(idt);
+                            si, err = (Sonar_Issues)row2;
+
+                            string pk = si.project_key;
+
+                            int bb = si.BLOCKER_BUG; int cb = si.CRITICAL_BUG; int mab = si.MAJOR_BUG; int mib = si.MINOR_BUG; int ib = si.INFO_BUG;
+                            int bc = si.BLOCKER_CODE_SMELL; int cc = si.CRITICAL_CODE_SMELL;int mac = si.MAJOR_CODE_SMELL;int mic = si.MINOR_CODE_SMELL;int ic = si.INFO_CODE_SMELL;
+                            int bv = si.BLOCKER_VULNERABILITY; int cv = si.CRITICAL_VULNERABILITY; int mav = si.MAJOR_VULNERABILITY; int miv = si.MINOR_VULNERABILITY;int iv = si.INFO_VULNERABILITY;
+
+                            json comp = {"product":product_name, "pk":component_id, "bb":bb, "cb":cb, "mab":mab, "mib":mib, "ib":ib, "bc":bc, "cc":cc, "mac":mac, "mic":mic, "ic":ic, "bv":bv, "cv":cv, "mav":mav, "miv":miv, "iv":iv};
+                            rspns[i] = comp;
+
+                            i = i + 1;
+                        }
+                        datatables:close(idt);
+                }
+                datatables:close(cdt);
             }
-            datatables:close(cdt);
+            datatables:close(pdt);
+            pns[n]=productNames;
+            products[n]=productIssues;
+            n=n+1;
 
         }
         datatables:close(dt);
         dbConnector.close();
-        json returnJson={"products":products,"components":rspns};
+        json returnJson={"areas":areas,"pns":pns,"products":products,"components":rspns};
         message response = {};
         messages:setJsonPayload(response,returnJson);
         messages:setHeader(response, "Access-Control-Allow-Origin", "*");
