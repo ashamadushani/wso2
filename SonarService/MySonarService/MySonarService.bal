@@ -9,7 +9,7 @@ import ballerina.lang.errors;
 import ballerina.lang.datatables;
 import ballerina.lang.system;
 import ballerina.lang.time;
-import org.wso2.ballerina.connectors.basicauth;
+import ballerina.utils;
 
 
 struct ResultDataType{
@@ -45,8 +45,6 @@ struct Area_Names{
 }
 
 string basicurl="https://wso2.org/sonar";
-string username="asha@wso2.com";
-string password="Asha-1993";
 
 string dbURL = "jdbc:mysql://127.0.0.1:3306";
 string mysqlusername = "root";
@@ -65,11 +63,11 @@ service<http> SonarIssuestoDB{
         message requestH = {};
         message sonarResponse = {};
 
-        basicauth:ClientConnector sonarcon = create basicauth:ClientConnector(basicurl,username,password);
+        http:ClientConnector sonarcon = create http:ClientConnector(basicurl);
         string Path="/api/projects";
         requestH = authHeader(request);
 
-        sonarResponse = basicauth:ClientConnector.get(sonarcon, Path, requestH);
+        sonarResponse = http:ClientConnector.get(sonarcon, Path, requestH);
         json sonarJsonResponse = messages:getJsonPayload(sonarResponse);
 
         json projects=jsons:getJson(sonarJsonResponse,"$.[?(@.k)].k");
@@ -90,7 +88,7 @@ service<http> MySonarService{
     @http:Path {value:"/getTotalIssues"}
     resource SonarTotalIsuueCount (message m) {
 
-        basicauth:ClientConnector sonarcon = create basicauth:ClientConnector(basicurl,username,password);
+        http:ClientConnector sonarcon = create http:ClientConnector(basicurl);
 
         message request = {};
         message requestH = {};
@@ -101,7 +99,7 @@ service<http> MySonarService{
         string Path = "/api/issues/search?resolved=no";
         requestH = authHeader(request);
 
-        sonarResponse = basicauth:ClientConnector.get(sonarcon, Path, requestH);
+        sonarResponse = http:ClientConnector.get(sonarcon, Path, requestH);
         sonarJSONResponse = messages:getJsonPayload(sonarResponse);
         int total = jsons:getInt(sonarJSONResponse, "$.total");
 
@@ -213,7 +211,7 @@ service<http> MySonarService{
                             int bc = si.BLOCKER_CODE_SMELL; int cc = si.CRITICAL_CODE_SMELL;int mac = si.MAJOR_CODE_SMELL;int mic = si.MINOR_CODE_SMELL;int ic = si.INFO_CODE_SMELL;
                             int bv = si.BLOCKER_VULNERABILITY; int cv = si.CRITICAL_VULNERABILITY; int mav = si.MAJOR_VULNERABILITY; int miv = si.MINOR_VULNERABILITY;int iv = si.INFO_VULNERABILITY;
 
-                            json comp = {"product":product_name, "pk":component_id, "bb":bb, "cb":cb, "mab":mab, "mib":mib, "ib":ib, "bc":bc, "cc":cc, "mac":mac, "mic":mic, "ic":ic, "bv":bv, "cv":cv, "mav":mav, "miv":miv, "iv":iv};
+                            json comp = {"area":area_name,"product":product_name, "pk":component_id, "bb":bb, "cb":cb, "mab":mab, "mib":mib, "ib":ib, "bc":bc, "cc":cc, "mac":mac, "mic":mic, "ic":ic, "bv":bv, "cv":cv, "mav":mav, "miv":miv, "iv":iv};
                             rspns[i] = comp;
 
                             i = i + 1;
@@ -269,7 +267,7 @@ service<http> MySonarService{
     @http:Path {value:"/getEngineerIssues/summary"}
     resource SonarProductIssueCountPerEngineer (message m, @http:PathParam {value:"Author"} string authorName) {
 
-        basicauth:ClientConnector sonarcon = create basicauth:ClientConnector(basicurl,username,password);
+        http:ClientConnector sonarcon = create http:ClientConnector(basicurl);
         message request = {};
         message requestH = {};
         message sonarResponse = {};
@@ -279,7 +277,7 @@ service<http> MySonarService{
         requestH = authHeader(request);
 
 
-        sonarResponse = basicauth:ClientConnector.get(sonarcon, Path, requestH);
+        sonarResponse = http:ClientConnector.get(sonarcon, Path, requestH);
         sonarJSONResponse = messages:getJsonPayload(sonarResponse);
         messages:setJsonPayload(response, sonarJSONResponse);
         reply response;
@@ -291,7 +289,7 @@ service<http> MySonarService{
 
 function issuesCount (string project_key, string product) (json) {
 
-    basicauth:ClientConnector sonarcon = create basicauth:ClientConnector(basicurl,username,password);
+    http:ClientConnector sonarcon = create http:ClientConnector(basicurl);
 
     message request = {};
     message requestH = {};
@@ -301,7 +299,7 @@ function issuesCount (string project_key, string product) (json) {
     string Path = "/api/issues/search?resolved=no&projectKeys=" + project_key;
     requestH = authHeader(request);
     system:println(basicurl+Path);
-    sonarResponse = basicauth:ClientConnector.get(sonarcon, Path, requestH);
+    sonarResponse = http:ClientConnector.get(sonarcon, Path, requestH);
     system:println(sonarResponse);
     sonarJSONResponse = messages:getJsonPayload(sonarResponse);
 
@@ -324,103 +322,110 @@ function issuesCount (string project_key, string product) (json) {
 }
 
 function componentIssues(json projects){
-    int loopsize=lengthof projects;
-    system:println(loopsize);
+    int lz=lengthof projects;
+    system:println(lz);
+    lz -> w1;
 
-    sql:ClientConnector dbConnector = create sql:ClientConnector(propertiesMap);
-    sql:Parameter[] params = [];
+    worker w1 {
+        int loopsize;
+        loopsize<-default;
 
-    string customStartTimeString = time:format(time:currentTime(), "yyyy-MM-dd--HH:mm:ss");
-    system:println("Start time: "+customStartTimeString);
+        sql:ClientConnector dbConnector = create sql:ClientConnector(propertiesMap);
+        sql:Parameter[] params = [];
 
-    sql:Parameter todayDate = {sqlType:"varchar", value:customStartTimeString};
-    params = [todayDate];
-    int ret= sql:ClientConnector.update(dbConnector,"INSERT INTO sonar_issue_db.date_table (date) VALUES (?)", params);
+        string customStartTimeString = time:format(time:currentTime(), "yyyy-MM-dd--HH:mm:ss");
+        system:println("Start time: " + customStartTimeString);
 
-    params = [];
-    datatable dt=sql:ClientConnector.select(dbConnector,"SELECT snapshot_id FROM sonar_issue_db.date_table  ORDER BY snapshot_id DESC LIMIT 1",params);
+        sql:Parameter todayDate = {sqlType:"varchar", value:customStartTimeString};
+        params = [todayDate];
+        int ret = sql:ClientConnector.update(dbConnector, "INSERT INTO sonar_issue_db.date_table (date) VALUES (?)", params);
 
-    Snapshots ss;
-    int snapshot_id;
-    errors:TypeCastError err;
-    while (datatables:hasNext(dt)) {
-        any row = datatables:next(dt);
-        ss, err = (Snapshots )row;
+        params = [];
+        datatable dt = sql:ClientConnector.select(dbConnector, "SELECT snapshot_id FROM sonar_issue_db.date_table  ORDER BY snapshot_id DESC LIMIT 1", params);
 
-        snapshot_id= ss.snapshot_id;
+        Snapshots ss;
+        int snapshot_id;
+        errors:TypeCastError err;
+        while (datatables:hasNext(dt)) {
+            any row = datatables:next(dt);
+            ss, err = (Snapshots)row;
 
+            snapshot_id = ss.snapshot_id;
+
+        }
+        datatables:close(dt);
+        transaction {
+
+            sql:Parameter snapshotid = {sqlType:"integer", value:snapshot_id};
+            int i = 0;
+            while (i < loopsize) {
+
+                var project_key, er = (string)projects[i];
+                system:println(i + "|" + project_key);
+                json sumaryofProjectJson = componentIssueCount(project_key);
+                system:println(sumaryofProjectJson);
+
+                sql:Parameter projectkey = {sqlType:"varchar", value:project_key};
+
+                int bb = jsons:getInt(sumaryofProjectJson, "$.bb");
+                sql:Parameter bb1 = {sqlType:"integer", value:bb};
+
+                int cb = jsons:getInt(sumaryofProjectJson, "$.cb");
+                sql:Parameter cb1 = {sqlType:"integer", value:cb};
+
+                int mab = jsons:getInt(sumaryofProjectJson, "$.mab");
+                sql:Parameter mab1 = {sqlType:"integer", value:mab};
+
+                int mib = jsons:getInt(sumaryofProjectJson, "$.mib");
+                sql:Parameter mib1 = {sqlType:"integer", value:mib};
+
+                int ib = jsons:getInt(sumaryofProjectJson, "$.ib");
+                sql:Parameter ib1 = {sqlType:"integer", value:ib};
+
+                int bc = jsons:getInt(sumaryofProjectJson, "$.bc");
+                sql:Parameter bc1 = {sqlType:"integer", value:bc};
+
+                int cc = jsons:getInt(sumaryofProjectJson, "$.cc");
+                sql:Parameter cc1 = {sqlType:"integer", value:cc};
+
+                int mac = jsons:getInt(sumaryofProjectJson, "$.mac");
+                sql:Parameter mac1 = {sqlType:"integer", value:mac};
+
+                int mic = jsons:getInt(sumaryofProjectJson, "$.mic");
+                sql:Parameter mic1 = {sqlType:"integer", value:mic};
+
+                int ic = jsons:getInt(sumaryofProjectJson, "$.ic");
+                sql:Parameter ic1 = {sqlType:"integer", value:ic};
+
+                int bv = jsons:getInt(sumaryofProjectJson, "$.bv");
+                sql:Parameter bv1 = {sqlType:"integer", value:bv};
+
+                int cv = jsons:getInt(sumaryofProjectJson, "$.cv");
+                sql:Parameter cv1 = {sqlType:"integer", value:cv};
+
+                int mav = jsons:getInt(sumaryofProjectJson, "$.mav");
+                sql:Parameter mav1 = {sqlType:"integer", value:mav};
+
+                int miv = jsons:getInt(sumaryofProjectJson, "$.miv");
+                sql:Parameter miv1 = {sqlType:"integer", value:miv};
+
+                int iv = jsons:getInt(sumaryofProjectJson, "$.iv");
+                sql:Parameter iv1 = {sqlType:"integer", value:iv};
+
+                params = [snapshotid, projectkey, bb1, cb1, mab1, mib1, ib1, bc1, cc1, mac1, mic1, ic1, bv1, cv1, mav1, miv1, iv1];
+                int ret1 = sql:ClientConnector.update(dbConnector, "INSERT INTO sonar_issue_db.sonar_component_issue_table(snapshot_id,project_key,BLOCKER_BUG,CRITICAL_BUG,MAJOR_BUG,MINOR_BUG,INFO_BUG,BLOCKER_CODE_SMELL,CRITICAL_CODE_SMELL,MAJOR_CODE_SMELL,MINOR_CODE_SMELL,INFO_CODE_SMELL,BLOCKER_VULNERABILITY,CRITICAL_VULNERABILITY,MAJOR_VULNERABILITY,MINOR_VULNERABILITY,INFO_VULNERABILITY) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", params);
+                i = i + 1;
+            }
+        }
+        string customEndTimeString = time:format(time:currentTime(), "yyyy-MM-dd--HH:mm:ss");
+        system:println("End time: " + customEndTimeString);
+        dbConnector.close();
     }
-    datatables:close(dt);
-
-    sql:Parameter snapshotid = {sqlType:"integer",value:snapshot_id};
-    int i=0;
-    while(i<loopsize){
-
-        var project_key , er=(string)projects[i];
-        system:println(i+"|"+project_key);
-        json sumaryofProjectJson=componentIssueCount(project_key);
-        system:println(sumaryofProjectJson);
-
-        sql:Parameter projectkey = {sqlType:"varchar",value:project_key};
-
-        int bb=jsons:getInt(sumaryofProjectJson,"$.bb");
-        sql:Parameter bb1 = {sqlType:"integer",value:bb};
-
-        int cb=jsons:getInt(sumaryofProjectJson,"$.cb");
-        sql:Parameter cb1 = {sqlType:"integer",value:cb};
-
-        int mab=jsons:getInt(sumaryofProjectJson,"$.mab");
-        sql:Parameter mab1 = {sqlType:"integer",value:mab};
-
-        int mib=jsons:getInt(sumaryofProjectJson,"$.mib");
-        sql:Parameter mib1 = {sqlType:"integer",value:mib};
-
-        int ib=jsons:getInt(sumaryofProjectJson,"$.ib");
-        sql:Parameter ib1 = {sqlType:"integer",value:ib};
-
-        int bc=jsons:getInt(sumaryofProjectJson,"$.bc");
-        sql:Parameter bc1 = {sqlType:"integer",value:bc};
-
-        int cc=jsons:getInt(sumaryofProjectJson,"$.cc");
-        sql:Parameter cc1 = {sqlType:"integer",value:cc};
-
-        int mac=jsons:getInt(sumaryofProjectJson,"$.mac");
-        sql:Parameter mac1 = {sqlType:"integer",value:mac};
-
-        int mic=jsons:getInt(sumaryofProjectJson,"$.mic");
-        sql:Parameter mic1 = {sqlType:"integer",value:mic};
-
-        int ic=jsons:getInt(sumaryofProjectJson,"$.ic");
-        sql:Parameter ic1 = {sqlType:"integer",value:ic};
-
-        int bv=jsons:getInt(sumaryofProjectJson,"$.bv");
-        sql:Parameter bv1 = {sqlType:"integer",value:bv};
-
-        int cv=jsons:getInt(sumaryofProjectJson,"$.cv");
-        sql:Parameter cv1 = {sqlType:"integer",value:cv};
-
-        int mav=jsons:getInt(sumaryofProjectJson,"$.mav");
-        sql:Parameter mav1 = {sqlType:"integer",value:mav};
-
-        int miv=jsons:getInt(sumaryofProjectJson,"$.miv");
-        sql:Parameter miv1 = {sqlType:"integer",value:miv};
-
-        int iv=jsons:getInt(sumaryofProjectJson,"$.iv");
-        sql:Parameter iv1 = {sqlType:"integer",value:iv};
-
-        params =[snapshotid,projectkey,bb1,cb1,mab1,mib1,ib1,bc1,cc1,mac1,mic1,ic1,bv1,cv1,mav1,miv1,iv1];
-        int ret1=sql:ClientConnector.update(dbConnector,"INSERT INTO sonar_issue_db.sonar_component_issue_table(snapshot_id,project_key,BLOCKER_BUG,CRITICAL_BUG,MAJOR_BUG,MINOR_BUG,INFO_BUG,BLOCKER_CODE_SMELL,CRITICAL_CODE_SMELL,MAJOR_CODE_SMELL,MINOR_CODE_SMELL,INFO_CODE_SMELL,BLOCKER_VULNERABILITY,CRITICAL_VULNERABILITY,MAJOR_VULNERABILITY,MINOR_VULNERABILITY,INFO_VULNERABILITY) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",params);
-        i=i+1;
-    }
-
-    string customEndTimeString = time:format(time:currentTime(), "yyyy-MM-dd--HH:mm:ss");
-    system:println("End time: "+customEndTimeString);
-    dbConnector.close();
 
 }
 
 function componentIssueCount(string project_key)(json) {
-    basicauth:ClientConnector sonarcon = create basicauth:ClientConnector(basicurl,username,password);
+    http:ClientConnector sonarcon = create http:ClientConnector(basicurl);
 
     message request = {};
     message requestH = {};
@@ -432,7 +437,7 @@ function componentIssueCount(string project_key)(json) {
     string Path = "/api/issues/search?resolved=no&ps=500&projectKeys=" + project_key+"&p="+p;
     requestH = authHeader(request);
     system:println(basicurl+Path);
-    sonarResponse = basicauth:ClientConnector.get(sonarcon, Path, requestH);
+    sonarResponse = http:ClientConnector.get(sonarcon, Path, requestH);
 
     sonarJSONResponse = messages:getJsonPayload(sonarResponse);
 
@@ -490,7 +495,7 @@ function componentIssueCount(string project_key)(json) {
         system:println(total+"|"+p);
         Path = "/api/issues/search?resolved=no&ps=500&projectKeys=" + project_key+"&p="+p;
         system:println(basicurl+Path);
-        sonarResponse = basicauth:ClientConnector.get(sonarcon, Path, requestH);
+        sonarResponse = http:ClientConnector.get(sonarcon, Path, requestH);
 
         sonarJSONResponse = messages:getJsonPayload(sonarResponse);
 
@@ -550,7 +555,10 @@ function componentIssueCount(string project_key)(json) {
 }
 
 function authHeader (message req) (message) {
-    messages:setHeader(req, "Authentication:", "token cac8359a1fca77b86c2960b389482fa1d9cca197d");
+    string token="fa9fb104861021e74f22fe25cb2bbdf31b554575"+":";
+    string encodedToken = utils:base64encode(token);
+    string passingToken = "Basic "+encodedToken;
+    messages:setHeader(req, "Authorization", passingToken);
     messages:setHeader(req, "Content-Type", "application/json");
     return req;
 
