@@ -20,6 +20,7 @@ function main (string[] args) {
         system:println("[w1 -> default] jw: " + jsons:toString(jw));
         jw -> default;
     }
+
 }
 function add()(int a){
     int i=1;

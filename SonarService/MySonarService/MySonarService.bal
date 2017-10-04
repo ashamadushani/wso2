@@ -69,7 +69,7 @@ service<http> SonarIssuestoDB{
 
         sonarResponse = http:ClientConnector.get(sonarcon, Path, requestH);
         json sonarJsonResponse = messages:getJsonPayload(sonarResponse);
-
+        system:println(sonarJsonResponse);
         json projects=jsons:getJson(sonarJsonResponse,"$.[?(@.k)].k");
         componentIssues(projects);
 
@@ -98,16 +98,15 @@ service<http> MySonarService{
 
         string Path = "/api/issues/search?resolved=no";
         requestH = authHeader(request);
-
         sonarResponse = http:ClientConnector.get(sonarcon, Path, requestH);
-        sonarJSONResponse = messages:getJsonPayload(sonarResponse);
+        sonarJSONResponse =messages:getJsonPayload(sonarResponse);
         int total = jsons:getInt(sonarJSONResponse, "$.total");
 
         string tot=<string >total;
 
         time:Time currentTime = time:currentTime();
         string customTimeString = time:format(currentTime, "yyyy-MM-dd--HH:mm:ss");
-        
+
         json sonarPayload = {"Date":customTimeString,"TotalIssues":tot};
 
         messages:setJsonPayload(response, sonarPayload);
@@ -238,7 +237,7 @@ service<http> MySonarService{
 
     @http:GET {}
     @http:Path {value:"/getProductIssues/{Product}/summary"}
-    resource SonarProductIssueCount (message m, @http:PathParam {value:"Product"} string product) {
+    resource SonartIssueCountSummary (message m, @http:PathParam {value:"Product"} string product) {
 
         sql:ClientConnector dbConnector = create sql:ClientConnector(propertiesMap);
 
@@ -264,7 +263,7 @@ service<http> MySonarService{
     }
 
     @http:GET {}
-    @http:Path {value:"/getEngineerIssues/summary"}
+    @http:Path {value:"/getEngineerIssues/{Author}/summary"}
     resource SonarProductIssueCountPerEngineer (message m, @http:PathParam {value:"Author"} string authorName) {
 
         http:ClientConnector sonarcon = create http:ClientConnector(basicurl);
@@ -273,7 +272,7 @@ service<http> MySonarService{
         message sonarResponse = {};
         json sonarJSONResponse = {};
         message response = {};
-        string Path = "/api/issues/search?authors=" + authorName+"@gmail.com";
+        string Path = "/api/issues/search?authors=" + authorName+"@wso2.com";
         requestH = authHeader(request);
 
 
@@ -555,7 +554,7 @@ function componentIssueCount(string project_key)(json) {
 }
 
 function authHeader (message req) (message) {
-    string token="fa9fb104861021e74f22fe25cb2bbdf31b554575"+":";
+    string token="f83a37e2ee709f7f2dd55c7c311632fe309d14fd"+":";
     string encodedToken = utils:base64encode(token);
     string passingToken = "Basic "+encodedToken;
     messages:setHeader(req, "Authorization", passingToken);
