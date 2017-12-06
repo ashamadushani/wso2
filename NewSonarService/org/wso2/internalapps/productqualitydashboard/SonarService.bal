@@ -10,7 +10,6 @@ import ballerina.data.sql;
 import ballerina.lang.errors;
 import ballerina.lang.datatables;
 
-
 struct Snapshots{
     int snapshot_id;
 }
@@ -73,7 +72,6 @@ service<http> SonarService {
         int total = jsons:getInt(sonarJSONResponse, "$.total");
 
         string tot = <string>total;
-
         time:Time currentTime = time:currentTime();
         string customTimeString = time:format(currentTime, "yyyy-MM-dd--HH:mm:ss");
 
